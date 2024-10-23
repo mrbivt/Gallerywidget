@@ -129,11 +129,18 @@
 </head>
 <body>
 
-    <div class="slider-container">
-        <div class="before-after-slider">
-            <div class="slider-handle"></div>
+<div class="slider-container">
+    <div class="before-after-slider">
+        <div class="before">
+            <img id="before-image" src="" alt="Before Image">
         </div>
+        <div class="after">
+            <img id="after-image" src="" alt="After Image">
+        </div>
+        <div class="slider-handle"></div>
     </div>
+</div>
+
 
     <input type="file" id="before-upload" accept="image/*" onchange="loadImage(event, 'before')">
     <input type="file" id="after-upload" accept="image/*" onchange="loadImage(event, 'after')">
@@ -278,7 +285,7 @@
                         url: 'https://api.imgur.com/3/image',
                         type: 'POST',
                         headers: {
-                            'Authorization': `Client-ID 7124454718c7902` // Thay YOUR_CLIENT_ID bằng Client ID của bạn
+                            'Authorization': 'Client-ID YOUR_CLIENT_ID'
                         },
                         data: {
                             image: base64Data,
@@ -301,7 +308,7 @@
                     url: `https://api.imgur.com/3/image/${deletehash}`,
                     type: 'DELETE',
                     headers: {
-                        'Authorization': `Client-ID 7124454718c7902` // Thay YOUR_CLIENT_ID bằng Client ID của bạn
+                        'Authorization': 'Client-ID 7124454718c7902'
                     },
                     success: function(response) {
                         console.log('Deleted from Imgur: ', response);
