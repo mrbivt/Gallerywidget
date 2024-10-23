@@ -42,7 +42,7 @@
         .before img, .after img {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
         }
 
         .slider-handle {
@@ -56,50 +56,128 @@
             cursor: ew-resize;
             z-index: 2;
         }
+
+        .upload-btn, .delete-btn {
+            margin: 10px;
+        }
     </style>
 </head>
 <body>
 
     <div class="slider-container">
         <div class="before-after-slider">
+            <div class="before">
+                <img id="before-img" src="https://via.placeholder.com/640x400/ff7f7f/333333?text=Before" alt="Before Image">
+            </div>
+            <div class="after">
+                <img id="after-img" src="https://via.placeholder.com/640x400/7f7fff/333333?text=After" alt="After Image">
+            </div>
             <div class="slider-handle"></div>
         </div>
     </div>
 
+    <!-- Chọn file ảnh trước và sau -->
+    <input type="file" id="before-upload" class="upload-btn" accept="image/*">
+    <input type="file" id="after-upload" class="upload-btn" accept="image/*">
+    <button id="upload-btn" class="upload-btn">Upload to GitHub</button>
+    <button id="delete-btn" class="delete-btn">Delete from GitHub</button>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        $(document).ready(function() {
-            var $sliderHandle = $('.slider-handle');
-            var $before = $('.before');
-            var $after = $('.after');
-            var sliderWidth = $('.slider-container').width();
-            var isDragging = false;
+        const githubToken = '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'; // Thay thế bằng token của bạn
+        const repo = 'mrbivt/webwidget'; // Thay thế bằng repo của bạn
+        const beforePath = 'path/to/before-image.jpg'; // Đường dẫn đến ảnh Before
+        const afterPath = 'path/to/after-image.jpg'; // Đường dẫn đến ảnh After
 
-            $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
+        // Upload file lên GitHub
+        async function uploadImage(file, path) {
+            const base64Content = await toBase64(file);
+            const url = `https://api.github.com/repos/${repo}/contents/${path}`;
 
-            function updateSlider(offsetX) {
-                $sliderHandle.css('left', offsetX);
-                $after.css('clip-path', 'inset(0 ' + (sliderWidth - offsetX) + 'px 0 0)');
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `Upload ${path}`,
+                    content: base64Content.split(',')[1] // Loại bỏ phần đầu 'data:image/...;base64,'
+                })
+            });
+
+            if (response.ok) {
+                alert(`Uploaded ${path} successfully`);
+            } else {
+                alert(`Failed to upload ${path}`);
             }
+        }
 
-            function onMouseMove(e) {
-                if (isDragging) {
-                    var offsetX = e.clientX - $sliderHandle.parent().offset().left;
-                    offsetX = Math.max(0, Math.min(offsetX, sliderWidth));
-                    updateSlider(offsetX);
+        // Xóa file từ GitHub
+        async function deleteImage(path) {
+            const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+
+            // Để xóa, cần lấy sha của file trước
+            const getResponse = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `token ${githubToken}`
                 }
+            });
+
+            if (getResponse.ok) {
+                const data = await getResponse.json();
+                const sha = data.sha;
+
+                const deleteResponse = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Delete ${path}`,
+                        sha: sha
+                    })
+                });
+
+                if (deleteResponse.ok) {
+                    alert(`Deleted ${path} successfully`);
+                } else {
+                    alert(`Failed to delete ${path}`);
+                }
+            } else {
+                alert(`File not found: ${path}`);
             }
+        }
 
-            $sliderHandle.on('mousedown', function(e) {
-                isDragging = true;
-                e.preventDefault();
-                $(document).on('mousemove', onMouseMove);
+        // Chuyển file sang base64
+        function toBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
             });
+        }
 
-            $(document).on('mouseup', function() {
-                isDragging = false;
-                $(document).off('mousemove', onMouseMove);
-            });
+        // Xử lý khi bấm nút Upload
+        document.getElementById('upload-btn').addEventListener('click', () => {
+            const beforeFile = document.getElementById('before-upload').files[0];
+            const afterFile = document.getElementById('after-upload').files[0];
+
+            if (beforeFile && afterFile) {
+                uploadImage(beforeFile, beforePath);
+                uploadImage(afterFile, afterPath);
+            } else {
+                alert('Please select both before and after images.');
+            }
+        });
+
+        // Xử lý khi bấm nút Delete
+        document.getElementById('delete-btn').addEventListener('click', () => {
+            deleteImage(beforePath);
+            deleteImage(afterPath);
         });
     </script>
 </body>
