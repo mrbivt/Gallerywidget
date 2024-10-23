@@ -1,1 +1,36 @@
-<iframe src="before-after-slider.html" width="700" height="450" frameborder="0"></iframe>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iframe Crop Example</title>
+    <style>
+        /* Phong cách của container chứa iframe */
+        .iframe-container {
+            position: relative;
+            width: 400px; /* Đặt kích thước mong muốn cho vùng hiển thị */
+            height: 400px;
+            overflow: hidden; /* Ẩn những phần nằm ngoài khung */
+            border: 1px solid red; /* Đặt đường viền nếu cần */
+        }
+
+        /* Phong cách của iframe */
+        iframe {
+            position: absolute;
+            top: -50px; /* Điều chỉnh vị trí dọc của nội dung trong iframe */
+            left: -120px; /* Điều chỉnh vị trí ngang của nội dung trong iframe */
+            width: 1000px; /* Đặt kích thước đầy đủ của iframe */
+            height: 800px;
+            border: none; /* Ẩn viền iframe */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Container bao bọc iframe để giới hạn hiển thị -->
+    <div class="iframe-container">
+        <iframe id="myIframe" src="before-after-slider.html" frameborder="0"></iframe>
+    </div>
+
+</body>
+</html>
