@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Before After Image Slider with GitHub Upload</title>
+    <title>Before After Image Slider with Imgur Upload</title>
     <style>
         body {
             display: flex;
@@ -131,12 +131,6 @@
 
     <div class="slider-container">
         <div class="before-after-slider">
-            <div class="before">
-                <img id="before-image" src="https://raw.githubusercontent.com/mrbivt/webwidget/main/before.jpg" alt="Before Image">
-            </div>
-            <div class="after">
-                <img id="after-image" src="https://raw.githubusercontent.com/mrbivt/webwidget/main/after.jpg" alt="After Image">
-            </div>
             <div class="slider-handle"></div>
         </div>
     </div>
@@ -151,10 +145,6 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        const GITHUB_TOKEN = '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'; // Thay thế bằng token của bạn
-        const REPO = 'mrbivt/webwidget'; // Thay thế bằng tên repo của bạn
-        const BRANCH = 'main'; // Nhánh mặc định
-
         $(document).ready(function() {
             var $sliderHandle = $('.slider-handle');
             var $before = $('.before');
@@ -224,176 +214,105 @@
                 var beforeImage = $('#before-image').attr('src');
                 var afterImage = $('#after-image').attr('src');
 
-                var $set = $('<div class="set" data-index="' + setCount + '"></div>');
-                var $beforeSetImg = $('<img src="' + beforeImage + '" alt="Set Before Image">');
-                var $afterSetImg = $('<img src="' + afterImage + '" alt="Set After Image">');
-                var $setNameLabel = $('<div class="set-name">' + setName + '</div>');
-                var $options = $('<div class="options"><button class="edit">Edit</button><button class="delete">Delete</button></div>');
-
-                $set.append($beforeSetImg).append($afterSetImg).append($setNameLabel).append($options);
-                $('#album').append($set);
-
-                // Lưu bộ ảnh vào local storage
-                saveToLocalStorage(setName, beforeImage, afterImage);
-
-                // Upload cả hai ảnh lên GitHub
-                uploadToGithub(beforeImage, setName + '_before.jpg');
-                uploadToGithub(afterImage, setName + '_after.jpg');
-
-                setCount++;
+                uploadToImgur(beforeImage, setName + '_before.jpg').then(deletehashBefore => {
+                    uploadToImgur(afterImage, setName + '_after.jpg').then(deletehashAfter => {
+                        saveToLocalStorage(setCount, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter);
+                        addSetToAlbum(setCount, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter);
+                        setCount++;
+                    });
+                });
             });
 
-            function saveToLocalStorage(setName, beforeImage, afterImage) {
+            function saveToLocalStorage(index, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter) {
                 let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-                sets.push({ name: setName, before: beforeImage, after: afterImage });
+                sets.push({ 
+                    index: index, 
+                    name: setName, 
+                    before: beforeImage, 
+                    after: afterImage, 
+                    deletehashBefore: deletehashBefore, 
+                    deletehashAfter: deletehashAfter 
+                });
                 localStorage.setItem('imageSets', JSON.stringify(sets));
             }
 
             function loadFromLocalStorage() {
                 let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-                sets.forEach((set, index) => {
-                    var $set = $('<div class="set" data-index="' + index + '"></div>');
-                    var $beforeSetImg = $('<img src="' + set.before + '" alt="Set Before Image">');
-                    var $afterSetImg = $('<img src="' + set.after + '" alt="Set After Image">');
-                    var $setNameLabel = $('<div class="set-name">' + set.name + '</div>');
-                    var $options = $('<div class="options"><button class="edit">Edit</button><button class="delete">Delete</button></div>');
+                sets.forEach(set => {
+                    addSetToAlbum(set.index, set.name, set.before, set.after, set.deletehashBefore, set.deletehashAfter);
+                });
+            }
 
-                    $set.append($beforeSetImg).append($afterSetImg).append($setNameLabel).append($options);
-                    $('#album').append($set);
+            function addSetToAlbum(index, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter) {
+                var $set = $('<div class="set" data-index="' + index + '"></div>');
+                var $beforeSetImg = $('<img src="' + beforeImage + '" alt="Set Before Image">');
+                var $afterSetImg = $('<img src="' + afterImage + '" alt="Set After Image">');
+                var $setNameLabel = $('<div class="set-name">' + setName + '</div>');
+                var $options = $('<div class="options"><button class="edit">Edit</button><button class="delete">Delete</button></div>');
+
+                $options.find('.delete').on('click', function() {
+                    deleteFromImgur(deletehashBefore);
+                    deleteFromImgur(deletehashAfter);
+                    $set.remove(); // Xóa phần tử khỏi giao diện
+                    deleteFromLocalStorage(index); // Xóa khỏi local storage
+                });
+
+                $set.append($beforeSetImg).append($afterSetImg).append($setNameLabel).append($options);
+                $('#album').append($set);
+            }
+
+            function deleteFromLocalStorage(index) {
+                let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
+                sets.splice(index, 1); // Xóa bộ ảnh tại index
+                localStorage.setItem('imageSets', JSON.stringify(sets));
+                // Cập nhật lại các index cho các bộ ảnh còn lại
+                $('#album').children().each(function(i) {
+                    $(this).attr('data-index', i);
+                });
+            }
+
+            function uploadToImgur(imageDataUrl, fileName) {
+                const base64Data = imageDataUrl.split(',')[1];
+                return new Promise((resolve, reject) => {
+                    $.ajax({
+                        url: 'https://api.imgur.com/3/image',
+                        type: 'POST',
+                        headers: {
+                            'Authorization': `Client-ID 7124454718c7902` // Thay YOUR_CLIENT_ID bằng Client ID của bạn
+                        },
+                        data: {
+                            image: base64Data,
+                            type: 'base64'
+                        },
+                        success: function(response) {
+                            console.log('Uploaded to Imgur: ', response.data.link);
+                            resolve(response.data.deletehash);
+                        },
+                        error: function(error) {
+                            console.error('Error uploading to Imgur: ', error);
+                            reject(error);
+                        }
+                    });
+                });
+            }
+
+            function deleteFromImgur(deletehash) {
+                $.ajax({
+                    url: `https://api.imgur.com/3/image/${deletehash}`,
+                    type: 'DELETE',
+                    headers: {
+                        'Authorization': `Client-ID 7124454718c7902` // Thay YOUR_CLIENT_ID bằng Client ID của bạn
+                    },
+                    success: function(response) {
+                        console.log('Deleted from Imgur: ', response);
+                    },
+                    error: function(error) {
+                        console.error('Error deleting from Imgur: ', error);
+                    }
                 });
             }
 
             loadFromLocalStorage();
-
-            function uploadToGithub(imageDataUrl, fileName) {
-                const base64Data = imageDataUrl.split(',')[1];
-
-                // Lấy thông tin tệp để kiểm tra xem nó đã tồn tại chưa
-                $.ajax({
-                    url: `https://api.github.com/repos/${REPO}/contents/${fileName}`,
-                    type: 'GET',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`
-                    },
-                    success: function(response) {
-                        // Nếu tệp đã tồn tại, sử dụng SHA để cập nhật tệp
-                        updateFile(fileName, response.sha, base64Data);
-                    },
-                    error: function(error) {
-                        // Nếu tệp chưa tồn tại (lỗi 404), thực hiện upload mới
-                        if (error.status === 404) {
-                            createFile(fileName, base64Data);
-                        } else {
-                            console.error('Error uploading to GitHub: ', error);
-                        }
-                    }
-                });
-            }
-
-            function createFile(fileName, base64Data) {
-                $.ajax({
-                    url: `https://api.github.com/repos/${REPO}/contents/${fileName}`,
-                    type: 'PUT',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    data: JSON.stringify({
-                        message: `Upload ${fileName}`,
-                        content: base64Data,
-                        branch: BRANCH
-                    }),
-                    success: function(response) {
-                        console.log('Uploaded to GitHub: ', response);
-                    },
-                    error: function(error) {
-                        console.error('Error uploading to GitHub: ', error);
-                    }
-                });
-            }
-
-            function updateFile(fileName, sha, base64Data) {
-                $.ajax({
-                    url: `https://api.github.com/repos/${REPO}/contents/${fileName}`,
-                    type: 'PUT',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    data: JSON.stringify({
-                        message: `Update ${fileName}`,
-                        content: base64Data,
-                        sha: sha,
-                        branch: BRANCH
-                    }),
-                    success: function(response) {
-                        console.log('Updated to GitHub: ', response);
-                    },
-                    error: function(error) {
-                        console.error('Error updating to GitHub: ', error);
-                    }
-                });
-            }
-
-            window.deleteFromGithub = function(fileName, callback) {
-                $.ajax({
-                    url: `https://api.github.com/repos/${REPO}/contents/${fileName}`,
-                    type: 'GET',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`
-                    },
-                    success: function(response) {
-                        // Gọi hàm xóa tệp
-                        deleteFile(fileName, response.sha, callback);
-                    },
-                    error: function(error) {
-                        console.error('Error retrieving file info from GitHub: ', error);
-                        callback(); // Gọi callback ngay cả khi có lỗi
-                    }
-                });
-            }
-
-            function deleteFile(fileName, sha, callback) {
-                $.ajax({
-                    url: `https://api.github.com/repos/${REPO}/contents/${fileName}`,
-                    type: 'DELETE',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    data: JSON.stringify({
-                        message: `Delete ${fileName}`,
-                        sha: sha,
-                        branch: BRANCH
-                    }),
-                    success: function(response) {
-                        console.log('Deleted from GitHub: ', response);
-                        if (callback) callback(); // Gọi callback nếu có
-                    },
-                    error: function(error) {
-                        console.error('Error deleting from GitHub: ', error);
-                    }
-                });
-            }
-
-            $(document).on('click', '.delete', function() {
-                var $set = $(this).closest('.set');
-                var index = $set.data('index');
-                let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-
-                const beforeImageName = `${sets[index].name}_before.jpg`;
-                const afterImageName = `${sets[index].name}_after.jpg`;
-
-                // Xóa cả hai ảnh
-                deleteFromGithub(beforeImageName, function() {
-                    deleteFromGithub(afterImageName, function() {
-                        // Xóa bộ ảnh khỏi localStorage
-                        sets.splice(index, 1);
-                        localStorage.setItem('imageSets', JSON.stringify(sets));
-                        $set.remove();
-                    });
-                });
-            });
         });
     </script>
 </body>
