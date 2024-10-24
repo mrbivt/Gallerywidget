@@ -47,7 +47,7 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            pointer-events: none; /* Vô hiệu hóa tương tác trên ảnh */
+            pointer-events: none;
         }
 
         .slider-handle {
@@ -128,41 +128,32 @@
             display: flex;
         }
 
-        <style>
-    body {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: auto;
-        background-color: #f0f0f0;
-        margin: 0;
-        flex-direction: column;
-    }
+        .navigation {
+            margin: 10px 0;
+        }
 
-    /* Các kiểu khác của bạn ở đây... */
-
-    .navigation {
-        margin: 10px 0; /* Giảm khoảng cách dưới và trên */
-        position: relative; /* Thiết lập vị trí tương đối */
-        top: -40px; /* Di chuyển lên trên 20px */
-    }
-
-    .navigation input[type="button"] {
-        border: none; /* Bỏ border */
-        color: white; /* Đặt màu chữ thành màu trắng để dễ nhìn */
-        padding: 10px; /* Thêm khoảng đệm cho nút */
-        cursor: pointer; /* Chỉ định con trỏ khi di chuột qua nút */
-    }
-
-    .navigation input[type="button"]:hover {
-        background-color: #333; /* Thay đổi màu khi hover để hiển thị hiệu ứng */
-    }
-</style>
-
+        .album-selection {
+            margin-bottom: 10px;
+        }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
+
+
+
+<div>
+    <input type="text" id="new-album-name" placeholder="Nhập tên album mới" />
+    <input type="button" id="create-album" value="Tạo Album">
+</div>
+
+<div class="album-selection">
+    <label for="album-select">Chọn Album:</label>
+    <select id="album-select">
+        <option value="">--Chọn Album--</option>
+    </select>
+</div>
+
 
 <div class="slider-container">
     <div class="before-after-slider">
@@ -178,16 +169,20 @@
 
 <div class="navigation">
     <input type="button" id="prev-set" value="◀️" style="margin-right: 10px;">
-	<span id="set-number" style="font-size: 16px; margin: 0 10px;">0/0</span> <!-- Phần tử hiển thị số thứ tự -->
+    <span id="set-number"></span>
     <input type="button" id="next-set" value="▶️">
 </div>
 
 <input type="file" id="before-upload" accept="image/*" onchange="loadImage(event, 'before')">
 <input type="file" id="after-upload" accept="image/*" onchange="loadImage(event, 'after')">
 <input type="text" id="set-name" placeholder="Nhập Tên Bộ Ảnh" />
+<select id="album-to-add">
+    <option value="">--Chọn Album để thêm--</option>
+</select>
 <input type="button" id="reset" value="Đặt Lại Ảnh">
 <input type="button" id="add-set" value="Thêm Bộ Ảnh">
-
+<!-- Nút để trích xuất HTML -->
+<input type="button" id="export-html" value="Trích Xuất HTML">
 <div class="album" id="album"></div>
 
 <script type="module">
@@ -210,8 +205,9 @@
     const db = getDatabase(app);
 
     $(document).ready(function() {
-        let currentSetIndex = 0; // Biến lưu chỉ số bộ ảnh hiện tại
-        let imageSets = []; // Mảng lưu trữ các bộ ảnh
+	   loadLastSelectedAlbum(); // Gọi hàm để tải album cuối cùng khi trang được tải
+        let currentSetIndex = 0;
+        let imageSets = [];
 
         var $sliderHandle = $('.slider-handle');
         var $after = $('.after');
@@ -223,9 +219,6 @@
             $after.css('clip-path', 'inset(0 ' + (sliderWidth - offsetX) + 'px 0 0)');
         }
 
-function updateSetNumber() {
-    $('#set-number').text(`${currentSetIndex + 1}/${imageSets.length}`);
-}
         function onMouseMove(e) {
             if (isDragging) {
                 var offsetX = e.clientX - $sliderHandle.parent().offset().left;
@@ -254,7 +247,6 @@ function updateSetNumber() {
             $(document).off('mousemove', onMouseMove);
         });
 
-        // Thêm sự kiện cảm ứng cho thiết bị di động
         $sliderHandle.on('touchstart', function(e) {
             isDragging = true;
             e.preventDefault();
@@ -286,122 +278,398 @@ function updateSetNumber() {
 
         function updateClipPath() {
             var sliderWidth = $('.slider-container').width();
-            $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
+            var handlePos = $sliderHandle.position().left;
+            var clipWidth = sliderWidth - handlePos;
+            $after.css('clip-path', 'inset(0 ' + clipWidth + 'px 0 0)');
         }
 
-        $('#reset').on('click', function() {
-            $('#before-image').attr('src', '');
-            $('#after-image').attr('src', '');
-            $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
-            $('#set-name').val('');
+        $('#create-album').on('click', function() {
+            const albumName = $('#new-album-name').val();
+            if (!albumName) {
+                alert('Vui lòng nhập tên album!');
+                return;
+            }
+
+            const albumRef = dbRef(db, 'albums/' + albumName);
+            set(albumRef, {
+                name: albumName
+            }).then(() => {
+                alert('Album đã được tạo thành công!');
+                $('#album-select, #album-to-add').append(`<option value="${albumName}">${albumName}</option>`);
+                $('#new-album-name').val(''); // Xóa nội dung sau khi tạo album
+            }).catch((error) => {
+                console.error('Lỗi khi tạo album:', error);
+            });
         });
 
         $('#add-set').on('click', function() {
-            const setName = $('#set-name').val().trim();
-            if (!setName) {
-                alert('Vui lòng nhập tên cho bộ ảnh!');
-                return;
-            }
-
+            const setName = $('#set-name').val();
+            const albumName = $('#album-to-add').val();
             const beforeImage = $('#before-image').attr('src');
             const afterImage = $('#after-image').attr('src');
 
-            if (!beforeImage || !afterImage) {
-                alert('Vui lòng tải lên cả hai ảnh trước và sau!');
+            if (!beforeImage || !afterImage || !albumName) {
+                alert('Vui lòng chọn cả hai ảnh và album!');
                 return;
             }
 
-            const beforeRef = ref(storage, 'images/' + setName + '/before.jpg');
-            const afterRef = ref(storage, 'images/' + setName + '/after.jpg');
-
-            uploadString(beforeRef, beforeImage, 'data_url').then(() => {
-                return uploadString(afterRef, afterImage, 'data_url');
-            }).then(() => {
-                const dbRefSet = dbRef(db, 'sets/' + setName);
-                set(dbRefSet, {
-                    before: beforeRef.fullPath,
-                    after: afterRef.fullPath
-                }).then(() => {
-                    alert('Bộ ảnh đã được thêm thành công!');
-                    $('#set-name').val('');
-                    loadAlbum(); // Tải lại album để hiển thị bộ ảnh mới
-                }).catch(error => {
-                    console.error('Lỗi khi thêm bộ ảnh: ', error);
-                });
-            }).catch(error => {
-                console.error('Lỗi khi tải ảnh lên: ', error);
-            });
-        });
-
-        function displaySet(setName, beforeUrl, afterUrl, index) {
-    const setData = { before: beforeUrl, after: afterUrl };
-    imageSets.push(setData); // Thêm vào mảng bộ ảnh
-
-    const $setDiv = $('<div class="set"></div>').appendTo('#album');
-    const $beforeImage = $('<img>').attr('src', beforeUrl).appendTo($setDiv);
-    const $afterImage = $('<img>').attr('src', afterUrl).appendTo($setDiv);
-    const $setNameDiv = $('<div class="set-name"></div>').text(`${index + 1}. ${setName}`).appendTo($setDiv); // Thêm số thứ tự
-
-    // Thêm sự kiện click cho bộ ảnh
-    $setDiv.on('click', function() {
-        currentSetIndex = imageSets.length - 1; // Cập nhật chỉ số bộ ảnh hiện tại
-        updateDisplayedSet();
-    });
-}
-
-
-       function loadAlbum() {
-    const albumRef = dbRef(db, 'sets');
-    get(albumRef).then(snapshot => {
-        if (snapshot.exists()) {
-            const album = snapshot.val();
-            $('#album').empty();
-            let index = 0; // Khởi tạo chỉ số cho bộ ảnh
-            $.each(album, function(setName, urls) {
-                if (urls && typeof urls === 'object' && urls.before && urls.after) {
-                    displaySet(setName, urls.before, urls.after, index); // Gọi với chỉ số
-                    index++; // Tăng chỉ số
-                } else {
-                    console.error('Bộ ảnh không hợp lệ: ', setName);
-                }
-            });
-            currentSetIndex = 0; // Đặt lại chỉ số
-            updateDisplayedSet(); // Cập nhật ảnh hiển thị
-            updateSetNumber(); // Cập nhật số thứ tự bộ ảnh
-        } else {
-            console.log('Không tìm thấy bộ ảnh nào.');
-        }
-    }).catch(error => {
-        console.error('Lỗi khi tải album: ', error);
-    });
-}
-
-
-
-        function updateDisplayedSet() {
-    if (imageSets.length === 0) return;
-
-    const { before, after } = imageSets[currentSetIndex];
-    $('#before-image').attr('src', before);
-    $('#after-image').attr('src', after);
-    updateClipPath();
-    updateSetNumber(); // Cập nhật số thứ tự bộ ảnh
-}
-
-
-        // Sự kiện cho nút trước và sau
-        $('#next-set').on('click', function() {
-            currentSetIndex = (currentSetIndex + 1) % imageSets.length; // Chuyển sang bộ ảnh tiếp theo
-            updateDisplayedSet();
+            saveSetToAlbum(albumName, setName, beforeImage, afterImage);
         });
 
         $('#prev-set').on('click', function() {
-            currentSetIndex = (currentSetIndex - 1 + imageSets.length) % imageSets.length; // Chuyển sang bộ ảnh trước đó
-            updateDisplayedSet();
+            if (currentSetIndex > 0) {
+                currentSetIndex--;
+                updateDisplayedSet();
+                updateSetNumber();
+            }
         });
 
-        // Tải album ngay khi trang được tải
-        loadAlbum();
+        $('#next-set').on('click', function() {
+            if (currentSetIndex < imageSets.length - 1) {
+                currentSetIndex++;
+                updateDisplayedSet();
+                updateSetNumber();
+            }
+        });
+
+        function updateDisplayedSet() {
+            const set = imageSets[currentSetIndex];
+            $('#before-image').attr('src', set.before);
+            $('#after-image').attr('src', set.after);
+            $('#set-name').val(set.name);
+            updateClipPath();
+        }
+
+        function updateSetNumber() {
+            $('#set-number').text((currentSetIndex + 1) + '/' + imageSets.length);
+        }
+
+        function displaySet(setName, beforeUrl, afterUrl) {
+    imageSets.push({ name: setName, before: beforeUrl, after: afterUrl });
+    $('#album').append(`
+        <div class="set" data-set-name="${setName}">
+            <img src="${beforeUrl}" alt="${setName}">
+            <div class="set-name">${setName}</div>
+            <div class="options">
+                <button class="delete-set">Xóa</button>
+            </div>
+        </div>
+    `);
+    updateSetNumber();
+}
+
+
+		$('#export-html').click(function() {
+            const albumName = $('#album-select').val();
+            const albumData = imageSets.map(set => ({
+                before: set.before,
+                after: set.after,
+                name: set.name
+            }));
+
+            const htmlContent = createHTMLContent(albumName, albumData);
+            const blob = new Blob([htmlContent], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${albumName}.html`;
+            link.click();
+        });
+
+ 
+ 
+	function createHTMLContent(albumName, sets) {
+    const setsHTML = sets.map((set, index) => `
+        <div class="set" id="set-${index}" style="display: ${index === 0 ? 'block' : 'none'};">
+            <h3>${set.name}</h3>
+            <div class="before-after-slider">
+                <div class="before"><img src="${set.before}" alt="Before"></div>
+                <div class="after"><img src="${set.after}" alt="After"></div>
+                <div class="slider-handle"></div>
+            </div>
+        </div>
+    `).join('');
+
+    return `
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Album ${albumName}</title>
+            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    flex-direction: column;
+                    margin: 0;
+                    padding: 20px;
+                    font-family: Arial, sans-serif;
+                }
+                .before-after-slider {
+                    position: relative;
+                    width: 640px;
+                    height: 400px;
+                    margin: 20px 0;
+                    overflow: hidden;
+                }
+                .before, .after {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    height: 100%;
+                    width: 100%;
+                }
+                .after {
+                    clip-path: inset(0 50% 0 0);
+                    transition: clip-path 0.3s ease;
+                }
+                .before img, .after img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                }
+                .slider-handle {
+                    position: absolute;
+                    top: 0;
+                    left: 50%;
+                    width: 5px;
+                    height: 100%;
+                    background-color: #ffffff;
+                    border-left: 2px solid #000;
+                    cursor: ew-resize;
+                    z-index: 2;
+                    transition: left 0.3s ease;
+                }
+                .navigation {
+                    margin: 10px 0;
+                }
+                button {
+                    padding: 10px;
+                    font-size: 16px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Album: ${albumName}</h1>
+            <div class="album">
+                ${setsHTML}
+            </div>
+            <div class="navigation">
+                <button id="prev-set">◀️ Trước</button>
+                <span id="set-number">1/${sets.length}</span>
+                <button id="next-set">Sau ▶️</button>
+            </div>
+            <script>
+                let currentSetIndex = 0;
+                const sets = document.querySelectorAll('.set');
+                const setNumber = document.getElementById('set-number');
+
+                function updateDisplayedSet() {
+                    sets.forEach((set, index) => {
+                        set.style.display = (index === currentSetIndex) ? 'block' : 'none';
+                    });
+                    setNumber.textContent = (currentSetIndex + 1) + '/' + sets.length;
+                }
+
+                document.getElementById('prev-set').addEventListener('click', () => {
+                    if (currentSetIndex > 0) {
+                        currentSetIndex--;
+                        updateDisplayedSet();
+                    }
+                });
+
+                document.getElementById('next-set').addEventListener('click', () => {
+                    if (currentSetIndex < sets.length - 1) {
+                        currentSetIndex++;
+                        updateDisplayedSet();
+                    }
+                });
+
+                // Phần trượt ảnh bằng jQuery
+                $(function() {
+                    var $sliderHandle = $('.slider-handle');
+                    var $after = $('.after');
+                    var sliderWidth = $('.before-after-slider').width();
+                    var isDragging = false;
+
+                    function updateSlider(offsetX) {
+                        $sliderHandle.css('left', offsetX);
+                        $after.css('clip-path', 'inset(0 ' + (sliderWidth - offsetX) + 'px 0 0)');
+                    }
+
+                    $sliderHandle.on('mousedown touchstart', function(e) {
+                        isDragging = true;
+                        e.preventDefault();
+                        $(document).on('mousemove touchmove', function(event) {
+                            var offsetX = (event.clientX || event.originalEvent.touches[0].clientX) - $sliderHandle.parent().offset().left;
+                            offsetX = Math.max(0, Math.min(offsetX, sliderWidth));
+                            updateSlider(offsetX);
+                        });
+                    });
+
+                    $(document).on('mouseup touchend', function() {
+                        isDragging = false;
+                        $(document).off('mousemove touchmove');
+                    });
+                });
+            </script>
+        </body>
+        </html>
+    `;
+}
+
+
+
+        function saveSetToAlbum(albumName, setName, beforeImage, afterImage) {
+            const setRef = dbRef(db, 'albums/' + albumName + '/sets/' + setName);
+            set(setRef, {
+                before: beforeImage,
+                after: afterImage
+            }).then(() => {
+                displaySet(setName, beforeImage, afterImage);
+                currentSetIndex = imageSets.length - 1;
+                updateDisplayedSet();
+            }).catch((error) => {
+                console.error('Lỗi khi lưu bộ ảnh:', error);
+            });
+        }
+
+        $('#album').on('click', '.set', function() {
+            const setName = $(this).data('set-name');
+            const setIndex = imageSets.findIndex(set => set.name === setName);
+            if (setIndex !== -1) {
+                currentSetIndex = setIndex;
+                updateDisplayedSet();
+            }
+        });
+
+        $('#album').on('click', '.delete-set', function() {
+    const setElement = $(this).closest('.set');
+    const setName = setElement.data('set-name');
+
+    const setRef = dbRef(db, 'albums/' + $('#album-select').val() + '/sets/' + setName); // Chỉnh sửa đường dẫn đến bộ ảnh
+    remove(setRef).then(() => {
+        setElement.remove();
+        const setIndex = imageSets.findIndex(set => set.name === setName);
+        if (setIndex !== -1) {
+            imageSets.splice(setIndex, 1);
+            if (currentSetIndex >= setIndex) {
+                currentSetIndex = Math.max(0, currentSetIndex - 1);
+            }
+            updateDisplayedSet();
+            updateSetNumber();
+        }
+    }).catch((error) => {
+        console.error('Lỗi khi xóa bộ ảnh:', error);
+    });
+});
+
+
+        function loadSetsFromDatabase() {
+            const setsRef = dbRef(db, 'sets');
+            get(setsRef).then((snapshot) => {
+                if (snapshot.exists()) {
+                    const sets = snapshot.val();
+                    $.each(sets, function(setName, urls) {
+                        if (urls && typeof urls === 'object' && urls.before && urls.after) {
+                            displaySet(setName, urls.before, urls.after);
+                        } else {
+                            console.error('Bộ ảnh không hợp lệ: ', setName);
+                        }
+                    });
+                    currentSetIndex = 0;
+                    updateDisplayedSet();
+                    updateSetNumber();
+                } else {
+                    console.log('Không tìm thấy bộ ảnh nào.');
+                }
+            }).catch((error) => {
+                console.error('Lỗi khi tải bộ ảnh:', error);
+            });
+        }
+
+        loadSetsFromDatabase();
+        loadAlbums();
+
+       $('#album-select').on('change', function() {
+    const selectedAlbum = $(this).val();
+    if (selectedAlbum) {
+        // Lưu album đã chọn vào Firebase
+        const lastAlbumRef = dbRef(db, 'lastSelectedAlbum');
+        set(lastAlbumRef, selectedAlbum).then(() => {
+            console.log('Album cuối cùng đã được lưu.');
+        }).catch((error) => {
+            console.error('Lỗi khi lưu album cuối cùng: ', error);
+        });
+        
+        loadSetsForAlbum(selectedAlbum); // Tải các bộ ảnh cho album đã chọn
+    }
+});
+
+function loadLastSelectedAlbum() {
+    const lastAlbumRef = dbRef(db, 'lastSelectedAlbum');
+    get(lastAlbumRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            const lastSelectedAlbum = snapshot.val();
+            if (lastSelectedAlbum) {
+                $('#album-select').val(lastSelectedAlbum); // Chọn album trên dropdown
+                loadSetsForAlbum(lastSelectedAlbum); // Tải các bộ ảnh cho album
+                console.log('Album cuối cùng đã được tải: ' + lastSelectedAlbum);
+            }
+        } else {
+            console.log('Chưa có album nào được chọn.');
+        }
+    }).catch((error) => {
+        console.error('Lỗi khi tải album cuối cùng: ', error);
+    });
+}
+
+
+
+        function loadAlbums() {
+            const albumRef = dbRef(db, 'albums');
+            get(albumRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    const albums = snapshot.val();
+                    $.each(albums, function(albumName) {
+                        $('#album-select, #album-to-add').append(`<option value="${albumName}">${albumName}</option>`);
+                    });
+                } else {
+                    console.log('Không tìm thấy album nào.');
+                }
+            }).catch(error => {
+                console.error('Lỗi khi tải album: ', error);
+            });
+        }
+
+        function loadSetsForAlbum(albumName) {
+            const setsRef = dbRef(db, `albums/${albumName}/sets`);
+            get(setsRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    const sets = snapshot.val();
+                    $('#album').empty(); 
+                    imageSets = []; 
+
+                    $.each(sets, function(setName, urls) {
+                        if (urls && typeof urls === 'object' && urls.before && urls.after) {
+                            displaySet(setName, urls.before, urls.after);
+                        } else {
+                            console.error('Bộ ảnh không hợp lệ: ', setName);
+                        }
+                    });
+                    currentSetIndex = 0; 
+                    updateDisplayedSet(); 
+                    updateSetNumber(); 
+                } else {
+                    console.log('Album không có bộ ảnh nào.');
+                }
+            }).catch(error => {
+                console.error('Lỗi khi tải bộ ảnh cho album: ', error);
+            });
+        }
     });
 </script>
 
