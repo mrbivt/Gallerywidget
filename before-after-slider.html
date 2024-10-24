@@ -127,6 +127,10 @@
         .set:hover .options {
             display: flex;
         }
+
+        .navigation {
+            margin: 20px 0;
+        }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
@@ -142,6 +146,11 @@
         </div>
         <div class="slider-handle"></div>
     </div>
+</div>
+
+<div class="navigation">
+    <input type="button" id="prev-set" value="◀️" style="margin-right: 10px;">
+    <input type="button" id="next-set" value="▶️">
 </div>
 
 <input type="file" id="before-upload" accept="image/*" onchange="loadImage(event, 'before')">
@@ -172,6 +181,9 @@
     const db = getDatabase(app);
 
     $(document).ready(function() {
+        let currentSetIndex = 0; // Biến lưu chỉ số bộ ảnh hiện tại
+        let imageSets = []; // Mảng lưu trữ các bộ ảnh
+
         var $sliderHandle = $('.slider-handle');
         var $after = $('.after');
         var sliderWidth = $('.slider-container').width();
@@ -263,79 +275,45 @@
             const afterImage = $('#after-image').attr('src');
 
             if (!beforeImage || !afterImage) {
-                alert('Vui lòng tải lên cả ảnh trước và sau!');
+                alert('Vui lòng tải lên cả hai ảnh trước và sau!');
                 return;
             }
 
-            uploadImage(beforeImage, setName + '_before.jpg').then(beforeUrl => {
-                return uploadImage(afterImage, setName + '_after.jpg').then(afterUrl => {
-                    const setData = {
-                        before: beforeUrl,
-                        after: afterUrl
-                    };
-                    set(dbRef(db, 'sets/' + setName), setData).then(() => {
-                        displaySet(setName, beforeUrl, afterUrl);
-                        $('#set-name').val('');
-                    });
+            const beforeRef = ref(storage, 'images/' + setName + '/before.jpg');
+            const afterRef = ref(storage, 'images/' + setName + '/after.jpg');
+
+            uploadString(beforeRef, beforeImage, 'data_url').then(() => {
+                return uploadString(afterRef, afterImage, 'data_url');
+            }).then(() => {
+                const dbRefSet = dbRef(db, 'sets/' + setName);
+                set(dbRefSet, {
+                    before: beforeRef.fullPath,
+                    after: afterRef.fullPath
+                }).then(() => {
+                    alert('Bộ ảnh đã được thêm thành công!');
+                    $('#set-name').val('');
+                    loadAlbum(); // Tải lại album để hiển thị bộ ảnh mới
+                }).catch(error => {
+                    console.error('Lỗi khi thêm bộ ảnh: ', error);
                 });
             }).catch(error => {
-                console.error('Lỗi khi upload ảnh: ', error);
+                console.error('Lỗi khi tải ảnh lên: ', error);
             });
         });
 
-        function uploadImage(imageSrc, name) {
-            return new Promise((resolve, reject) => {
-                const imageRef = ref(storage, name);
-                uploadString(imageRef, imageSrc, 'data_url').then(snapshot => {
-                    getDownloadURL(snapshot.ref).then(url => {
-                        resolve(url);
-                    });
-                }).catch(reject);
-            });
-        }
-
         function displaySet(setName, beforeUrl, afterUrl) {
-            const $set = $('<div>').addClass('set').on('click', function() {
-                $('#before-image').attr('src', beforeUrl);
-                $('#after-image').attr('src', afterUrl);
-                updateClipPath();
-                localStorage.setItem('lastSelectedSet', setName); // Lưu bộ ảnh đã chọn
-            });
+            const setData = { before: beforeUrl, after: afterUrl };
+            imageSets.push(setData); // Thêm vào mảng bộ ảnh
 
-            const $img = $('<img>').attr('src', beforeUrl);
-            const $name = $('<div>').addClass('set-name').text(setName);
-            const $options = $('<div class="options"><button class="delete-set">Xóa Bộ Ảnh</button></div>');
+            const $setDiv = $('<div class="set"></div>').appendTo('#album');
+            const $beforeImage = $('<img>').attr('src', beforeUrl).appendTo($setDiv);
+            const $afterImage = $('<img>').attr('src', afterUrl).appendTo($setDiv);
+            const $setNameDiv = $('<div class="set-name"></div>').text(setName).appendTo($setDiv);
 
-            $set.append($img).append($name).append($options);
-            $('#album').append($set);
-
-            // Xử lý sự kiện xóa bộ ảnh
-            $options.on('click', '.delete-set', function(event) {
-                event.stopPropagation(); // Ngăn chặn sự kiện click lan truyền
-                if (confirm('Bạn có chắc chắn muốn xóa bộ ảnh này không?')) {
-                    deleteSet(setName, beforeUrl, afterUrl);
-                }
-            });
-        }
-
-        function deleteSet(setName, beforeUrl, afterUrl) {
-            const beforeRef = ref(storage, setName + '_before.jpg');
-            const afterRef = ref(storage, setName + '_after.jpg');
-
-            // Xóa ảnh khỏi Firebase Storage
-            deleteObject(beforeRef).then(() => {
-                return deleteObject(afterRef);
-            }).then(() => {
-                // Xóa dữ liệu khỏi Realtime Database
-                return remove(dbRef(db, 'sets/' + setName));
-            }).then(() => {
-                // Xóa bộ ảnh khỏi giao diện người dùng
-                $('#album').empty(); // Xóa album và tải lại
-                loadAlbum();
-                alert('Bộ ảnh đã được xóa thành công!');
-            }).catch(error => {
-                console.error('Lỗi khi xóa bộ ảnh: ', error);
-                alert('Đã xảy ra lỗi khi xóa bộ ảnh.');
+            // Thêm sự kiện click cho bộ ảnh
+            $setDiv.on('click', function() {
+                currentSetIndex = imageSets.length - 1; // Cập nhật chỉ số bộ ảnh hiện tại
+                updateDisplayedSet();
             });
         }
 
@@ -349,26 +327,40 @@
                         if (urls && typeof urls === 'object' && urls.before && urls.after) {
                             displaySet(setName, urls.before, urls.after);
                         } else {
-                            console.error('Bộ ảnh ' + setName + ' không hợp lệ hoặc thiếu ảnh trước hoặc sau.');
+                            console.error('Bộ ảnh không hợp lệ: ', setName);
                         }
                     });
-                    const lastSelectedSet = localStorage.getItem('lastSelectedSet'); // Lấy bộ ảnh đã chọn cuối
-                    if (lastSelectedSet && album[lastSelectedSet]) {
-                        const lastSet = album[lastSelectedSet];
-                        $('#before-image').attr('src', lastSet.before);
-                        $('#after-image').attr('src', lastSet.after);
-                        updateClipPath();
-                    }
+                    currentSetIndex = 0; // Đặt lại chỉ số
+                    updateDisplayedSet(); // Cập nhật ảnh hiển thị
                 } else {
-                    console.log('Không có bộ ảnh nào.');
+                    console.log('Không tìm thấy bộ ảnh nào.');
                 }
             }).catch(error => {
                 console.error('Lỗi khi tải album: ', error);
             });
         }
 
-        loadAlbum(); // Tải album khi trang được tải
+        function updateDisplayedSet() {
+            if (imageSets.length === 0) return;
+
+            const { before, after } = imageSets[currentSetIndex];
+            $('#before-image').attr('src', before);
+            $('#after-image').attr('src', after);
+            updateClipPath();
+        }
+
+        // Sự kiện cho nút trước và sau
+        $('#next-set').on('click', function() {
+            currentSetIndex = (currentSetIndex + 1) % imageSets.length; // Chuyển sang bộ ảnh tiếp theo
+            updateDisplayedSet();
+        });
+
+        $('#prev-set').on('click', function() {
+            currentSetIndex = (currentSetIndex - 1 + imageSets.length) % imageSets.length; // Chuyển sang bộ ảnh trước đó
+            updateDisplayedSet();
+        });
     });
 </script>
+
 </body>
 </html>
