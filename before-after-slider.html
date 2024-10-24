@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Before After Image Slider with Imgur Upload</title>
+    <title>Trình Chiếu Ảnh Trước và Sau với Firebase</title>
     <style>
         body {
             display: flex;
@@ -20,8 +20,7 @@
             width: 640px;
             height: 400px;
             overflow: hidden;
-            margin-bottom: 20px;
-            margin-top: 20px;
+            margin: 20px 0;
         }
 
         .before-after-slider {
@@ -41,6 +40,7 @@
 
         .after {
             clip-path: inset(0 50% 0 0);
+            transition: clip-path 0.3s ease;
         }
 
         .before img, .after img {
@@ -59,6 +59,7 @@
             border-left: 2px solid #000;
             cursor: ew-resize;
             z-index: 2;
+            transition: left 0.3s ease;
         }
 
         input[type="file"], input[type="button"], input[type="text"] {
@@ -126,16 +127,17 @@
             display: flex;
         }
     </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
 
 <div class="slider-container">
     <div class="before-after-slider">
         <div class="before">
-            <img id="before-image" src="" alt="Before Image">
+            <img id="before-image" src="" alt="Ảnh Trước">
         </div>
         <div class="after">
-            <img id="after-image" src="" alt="After Image">
+            <img id="after-image" src="" alt="Ảnh Sau">
         </div>
         <div class="slider-handle"></div>
     </div>
@@ -143,23 +145,36 @@
 
 <input type="file" id="before-upload" accept="image/*" onchange="loadImage(event, 'before')">
 <input type="file" id="after-upload" accept="image/*" onchange="loadImage(event, 'after')">
-<input type="text" id="set-name" placeholder="Enter Set Name" />
-<input type="button" id="reset" value="Reset Images">
-<input type="button" id="add-set" value="Add Set Images">
+<input type="text" id="set-name" placeholder="Nhập Tên Bộ Ảnh" />
+<input type="button" id="reset" value="Đặt Lại Ảnh">
+<input type="button" id="add-set" value="Thêm Bộ Ảnh">
 
 <div class="album" id="album"></div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
+<script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js';
+    import { getStorage, ref, uploadString, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js';
+    import { getDatabase, ref as dbRef, set, get } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js';
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDbVeGarGP8z52ElsyvI1wqwjyjLXSZrbc",
+        authDomain: "before-after-gallery.firebaseapp.com",
+        projectId: "before-after-gallery",
+        storageBucket: "before-after-gallery.appspot.com",
+        messagingSenderId: "347435161918",
+        appId: "1:347435161918:web:5f6e3c1bbe4a59d55eb46f",
+        databaseURL: "https://before-after-gallery-default-rtdb.firebaseio.com/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+    const db = getDatabase(app);
+
     $(document).ready(function() {
         var $sliderHandle = $('.slider-handle');
-        var $before = $('.before');
         var $after = $('.after');
         var sliderWidth = $('.slider-container').width();
         var isDragging = false;
-        var setCount = 0;
-
-        $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
 
         function updateSlider(offsetX) {
             $sliderHandle.css('left', offsetX);
@@ -192,148 +207,116 @@
             reader.onload = function(e) {
                 if (type === 'before') {
                     $('#before-image').attr('src', e.target.result);
-                    localStorage.setItem('beforeImage', e.target.result); // Lưu hình ảnh before vào Local Storage
                 } else {
                     $('#after-image').attr('src', e.target.result);
-                    localStorage.setItem('afterImage', e.target.result); // Lưu hình ảnh after vào Local Storage
                 }
-                $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
+                updateClipPath();
             }
 
             if (input.files && input.files[0]) {
                 reader.readAsDataURL(input.files[0]);
             }
+        };
+
+        function updateClipPath() {
+            var sliderWidth = $('.slider-container').width();
+            $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
         }
 
         $('#reset').on('click', function() {
-            $('#before-image').attr('src', 'https://raw.githubusercontent.com/mrbivt/webwidget/main/before.jpg');
-            $('#after-image').attr('src', 'https://raw.githubusercontent.com/mrbivt/webwidget/main/after.jpg');
-            localStorage.removeItem('beforeImage'); // Xóa hình ảnh from local storage
-            localStorage.removeItem('afterImage'); // Xóa hình ảnh from local storage
+            $('#before-image').attr('src', '');
+            $('#after-image').attr('src', '');
             $after.css('clip-path', 'inset(0 ' + (sliderWidth / 2) + 'px 0 0)');
             $('#set-name').val('');
         });
 
         $('#add-set').on('click', function() {
-            var setName = $('#set-name').val().trim();
+            const setName = $('#set-name').val().trim();
             if (!setName) {
                 alert('Vui lòng nhập tên cho bộ ảnh!');
                 return;
             }
 
-            var beforeImage = $('#before-image').attr('src');
-            var afterImage = $('#after-image').attr('src');
+            const beforeImage = $('#before-image').attr('src');
+            const afterImage = $('#after-image').attr('src');
 
-            uploadToImgur(beforeImage, setName + '_before.jpg').then(deletehashBefore => {
-                uploadToImgur(afterImage, setName + '_after.jpg').then(deletehashAfter => {
-                    saveToLocalStorage(setCount, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter);
-                    addSetToAlbum(setCount, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter);
-                    setCount++;
+            if (!beforeImage || !afterImage) {
+                alert('Vui lòng tải lên cả ảnh trước và sau!');
+                return;
+            }
+
+            uploadImage(beforeImage, setName + '_before.jpg').then(beforeUrl => {
+                return uploadImage(afterImage, setName + '_after.jpg').then(afterUrl => {
+                    const setData = {
+                        before: beforeUrl,
+                        after: afterUrl
+                    };
+                    set(dbRef(db, 'sets/' + setName), setData).then(() => {
+                        displaySet(setName, beforeUrl, afterUrl);
+                        $('#set-name').val('');
+                    });
                 });
+            }).catch(error => {
+                console.error('Lỗi khi upload ảnh: ', error);
             });
         });
 
-        function saveToLocalStorage(index, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter) {
-            let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-            sets.push({ 
-                index: index, 
-                name: setName, 
-                before: beforeImage, 
-                after: afterImage, 
-                deletehashBefore: deletehashBefore, 
-                deletehashAfter: deletehashAfter 
+        function uploadImage(imageSrc, name) {
+            return new Promise((resolve, reject) => {
+                const imageRef = ref(storage, name);
+                uploadString(imageRef, imageSrc, 'data_url').then(snapshot => {
+                    getDownloadURL(snapshot.ref).then(url => {
+                        resolve(url);
+                    });
+                }).catch(reject);
             });
-            localStorage.setItem('imageSets', JSON.stringify(sets));
         }
 
-        function loadFromLocalStorage() {
-            let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-            sets.forEach(set => {
-                addSetToAlbum(set.index, set.name, set.before, set.after, set.deletehashBefore, set.deletehashAfter);
+        function displaySet(setName, beforeUrl, afterUrl) {
+            const $set = $('<div>').addClass('set').on('click', function() {
+                $('#before-image').attr('src', beforeUrl);
+                $('#after-image').attr('src', afterUrl);
+                updateClipPath();
+                localStorage.setItem('lastSelectedSet', setName); // Lưu bộ ảnh đã chọn vào localStorage
             });
 
-            // Tải lại hình ảnh từ Local Storage nếu có
-            const beforeImage = localStorage.getItem('beforeImage');
-            const afterImage = localStorage.getItem('afterImage');
-
-            if (beforeImage) {
-                $('#before-image').attr('src', beforeImage);
-            }
-            if (afterImage) {
-                $('#after-image').attr('src', afterImage);
-            }
-        }
-
-        function addSetToAlbum(index, setName, beforeImage, afterImage, deletehashBefore, deletehashAfter) {
-            var $set = $('<div class="set" data-index="' + index + '"></div>');
-            var $beforeSetImg = $('<img src="' + beforeImage + '" alt="Set Before Image">');
-            var $afterSetImg = $('<img src="' + afterImage + '" alt="Set After Image">');
-            var $setNameLabel = $('<div class="set-name">' + setName + '</div>');
-            var $options = $('<div class="options"><button class="edit">Edit</button><button class="delete">Delete</button></div>');
-
-            $options.find('.delete').on('click', function() {
-                deleteFromImgur(deletehashBefore);
-                deleteFromImgur(deletehashAfter);
-                $set.remove(); // Xóa phần tử khỏi giao diện
-                deleteFromLocalStorage(index); // Xóa khỏi local storage
-            });
-
-            $set.append($beforeSetImg).append($afterSetImg).append($setNameLabel).append($options);
+            const $img = $('<img>').attr('src', beforeUrl);
+            const $name = $('<div>').addClass('set-name').text(setName);
+            $set.append($img).append($name);
             $('#album').append($set);
         }
 
-        function deleteFromLocalStorage(index) {
-            let sets = JSON.parse(localStorage.getItem('imageSets')) || [];
-            sets.splice(index, 1); // Xóa bộ ảnh tại index
-            localStorage.setItem('imageSets', JSON.stringify(sets));
-            // Cập nhật lại các index cho các bộ ảnh còn lại
-            $('#album').children().each(function(i) {
-                $(this).attr('data-index', i);
-            });
-        }
-
-        function uploadToImgur(imageDataUrl, fileName) {
-            const base64Data = imageDataUrl.split(',')[1];
-            return new Promise((resolve, reject) => {
-                $.ajax({
-                    url: 'https://api.imgur.com/3/image',
-                    type: 'POST',
-                    headers: {
-                        'Authorization': 'Client-ID YOUR_CLIENT_ID'
-                    },
-                    data: {
-                        image: base64Data,
-                        type: 'base64'
-                    },
-                    success: function(response) {
-                        console.log('Uploaded to Imgur: ', response.data.link);
-                        resolve(response.data.deletehash);
-                    },
-                    error: function(error) {
-                        console.error('Error uploading to Imgur: ', error);
-                        reject(error);
-                    }
-                });
-            });
-        }
-
-        function deleteFromImgur(deletehash) {
-            $.ajax({
-                url: `https://api.imgur.com/3/image/${deletehash}`,
-                type: 'DELETE',
-                headers: {
-                    'Authorization': 'Client-ID 7124454718c7902'
-                },
-                success: function(response) {
-                    console.log('Deleted from Imgur: ', response);
-                },
-                error: function(error) {
-                    console.error('Error deleting from Imgur: ', error);
+        function loadAlbum() {
+    const albumRef = dbRef(db, 'sets');
+    get(albumRef).then(snapshot => {
+        if (snapshot.exists()) {
+            const album = snapshot.val();
+            $('#album').empty();
+            $.each(album, function(setName, urls) {
+                // Kiểm tra xem urls có tồn tại và có cả trước và sau
+                if (urls && typeof urls === 'object' && urls.before && urls.after) {
+                    displaySet(setName, urls.before, urls.after);
+                } else {
+                    console.error('Bộ ảnh ' + setName + ' không hợp lệ hoặc thiếu ảnh trước hoặc sau.');
                 }
             });
+            const lastSelectedSet = localStorage.getItem('lastSelectedSet'); // Lấy bộ ảnh đã chọn cuối
+            if (lastSelectedSet && album[lastSelectedSet]) {
+                const lastSet = album[lastSelectedSet];
+                $('#before-image').attr('src', lastSet.before);
+                $('#after-image').attr('src', lastSet.after);
+                updateClipPath();
+            }
+        } else {
+            console.log('Không có bộ ảnh nào.');
         }
+    }).catch(error => {
+        console.error('Lỗi khi tải album: ', error);
+    });
+}
 
-        loadFromLocalStorage();
+
+        loadAlbum();
     });
 </script>
 </body>
