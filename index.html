@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iframe Crop Example</title>
+    <title>Embed Crop Example</title>
     <style>
-        /* Phong cách của container chứa iframe */
-        .iframe-container {
+        /* Phong cách của container chứa embed */
+        .embed-container {
             position: relative;
             width: 320px; /* Đặt kích thước mong muốn cho vùng hiển thị */
             height: 370px;
@@ -14,22 +14,21 @@
             border: 1px solid red; /* Đặt đường viền nếu cần */
         }
 
-        /* Phong cách của iframe */
-        iframe {
+        /* Phong cách của embed */
+        embed {
             position: absolute;
-            top: -50px; /* Điều chỉnh vị trí dọc của nội dung trong iframe */
-            left: -340px; /* Điều chỉnh vị trí ngang của nội dung trong iframe */
-            width: 1000px; /* Đặt kích thước đầy đủ của iframe */
+            top: -50px; /* Điều chỉnh vị trí dọc của nội dung trong embed */
+            left: -340px; /* Điều chỉnh vị trí ngang của nội dung trong embed */
+            width: 1000px; /* Đặt kích thước đầy đủ của embed */
             height: 800px;
-            border: none; /* Ẩn viền iframe */
         }
     </style>
 </head>
 <body>
 
-    <!-- Container bao bọc iframe để giới hạn hiển thị -->
-    <div class="iframe-container">
-        <iframe id="myIframe" src="https://mrbivt.github.io/Gallerywidget/before-after-slider.html" frameborder="0"></iframe>
+    <!-- Container bao bọc embed để giới hạn hiển thị -->
+    <div class="embed-container">
+        <embed id="myEmbed" src="before-after-slider.html" type="text/html" />
     </div>
 
 </body>
