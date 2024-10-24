@@ -153,8 +153,8 @@
 
 <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js';
-    import { getStorage, ref, uploadString, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js';
-    import { getDatabase, ref as dbRef, set, get } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js';
+    import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js';
+    import { getDatabase, ref as dbRef, set, get, remove } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js';
 
     const firebaseConfig = {
         apiKey: "AIzaSyDbVeGarGP8z52ElsyvI1wqwjyjLXSZrbc",
@@ -277,46 +277,75 @@
                 $('#before-image').attr('src', beforeUrl);
                 $('#after-image').attr('src', afterUrl);
                 updateClipPath();
-                localStorage.setItem('lastSelectedSet', setName); // Lưu bộ ảnh đã chọn vào localStorage
+                localStorage.setItem('lastSelectedSet', setName); // Lưu bộ ảnh đã chọn
             });
 
             const $img = $('<img>').attr('src', beforeUrl);
             const $name = $('<div>').addClass('set-name').text(setName);
-            $set.append($img).append($name);
+            const $options = $('<div class="options"><button class="delete-set">Xóa Bộ Ảnh</button></div>');
+
+            $set.append($img).append($name).append($options);
             $('#album').append($set);
+
+            // Xử lý sự kiện xóa bộ ảnh
+            $options.on('click', '.delete-set', function(event) {
+                event.stopPropagation(); // Ngăn chặn sự kiện click lan truyền
+                if (confirm('Bạn có chắc chắn muốn xóa bộ ảnh này không?')) {
+                    deleteSet(setName, beforeUrl, afterUrl);
+                }
+            });
+        }
+
+        function deleteSet(setName, beforeUrl, afterUrl) {
+            const beforeRef = ref(storage, setName + '_before.jpg');
+            const afterRef = ref(storage, setName + '_after.jpg');
+
+            // Xóa ảnh khỏi Firebase Storage
+            deleteObject(beforeRef).then(() => {
+                return deleteObject(afterRef);
+            }).then(() => {
+                // Xóa dữ liệu khỏi Realtime Database
+                return remove(dbRef(db, 'sets/' + setName));
+            }).then(() => {
+                // Xóa bộ ảnh khỏi giao diện người dùng
+                $('#album').empty(); // Xóa album và tải lại
+                loadAlbum();
+                alert('Bộ ảnh đã được xóa thành công!');
+            }).catch(error => {
+                console.error('Lỗi khi xóa bộ ảnh: ', error);
+                alert('Đã xảy ra lỗi khi xóa bộ ảnh.');
+            });
         }
 
         function loadAlbum() {
-    const albumRef = dbRef(db, 'sets');
-    get(albumRef).then(snapshot => {
-        if (snapshot.exists()) {
-            const album = snapshot.val();
-            $('#album').empty();
-            $.each(album, function(setName, urls) {
-                // Kiểm tra xem urls có tồn tại và có cả trước và sau
-                if (urls && typeof urls === 'object' && urls.before && urls.after) {
-                    displaySet(setName, urls.before, urls.after);
+            const albumRef = dbRef(db, 'sets');
+            get(albumRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    const album = snapshot.val();
+                    $('#album').empty();
+                    $.each(album, function(setName, urls) {
+                        if (urls && typeof urls === 'object' && urls.before && urls.after) {
+                            displaySet(setName, urls.before, urls.after);
+                        } else {
+                            console.error('Bộ ảnh ' + setName + ' không hợp lệ hoặc thiếu ảnh trước hoặc sau.');
+                        }
+                    });
+                    const lastSelectedSet = localStorage.getItem('lastSelectedSet'); // Lấy bộ ảnh đã chọn cuối
+                    if (lastSelectedSet && album[lastSelectedSet]) {
+                        const lastSet = album[lastSelectedSet];
+                        $('#before-image').attr('src', lastSet.before);
+                        $('#after-image').attr('src', lastSet.after);
+                        updateClipPath();
+                    }
                 } else {
-                    console.error('Bộ ảnh ' + setName + ' không hợp lệ hoặc thiếu ảnh trước hoặc sau.');
+                    console.log('Không có bộ ảnh nào.');
                 }
+            }).catch(error => {
+                console.error('Lỗi khi tải album: ', error);
             });
-            const lastSelectedSet = localStorage.getItem('lastSelectedSet'); // Lấy bộ ảnh đã chọn cuối
-            if (lastSelectedSet && album[lastSelectedSet]) {
-                const lastSet = album[lastSelectedSet];
-                $('#before-image').attr('src', lastSet.before);
-                $('#after-image').attr('src', lastSet.after);
-                updateClipPath();
-            }
-        } else {
-            console.log('Không có bộ ảnh nào.');
         }
-    }).catch(error => {
-        console.error('Lỗi khi tải album: ', error);
-    });
-}
 
-
-        loadAlbum();
+        loadAlbum(); // Tải album khi trang được tải
     });
 </script>
 </body>
