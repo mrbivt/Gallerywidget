@@ -128,9 +128,37 @@
             display: flex;
         }
 
-        .navigation {
-            margin: 20px 0;
-        }
+        <style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: auto;
+        background-color: #f0f0f0;
+        margin: 0;
+        flex-direction: column;
+    }
+
+    /* Các kiểu khác của bạn ở đây... */
+
+    .navigation {
+        margin: 10px 0; /* Giảm khoảng cách dưới và trên */
+        position: relative; /* Thiết lập vị trí tương đối */
+        top: -40px; /* Di chuyển lên trên 20px */
+    }
+
+    .navigation input[type="button"] {
+        border: none; /* Bỏ border */
+        color: white; /* Đặt màu chữ thành màu trắng để dễ nhìn */
+        padding: 10px; /* Thêm khoảng đệm cho nút */
+        cursor: pointer; /* Chỉ định con trỏ khi di chuột qua nút */
+    }
+
+    .navigation input[type="button"]:hover {
+        background-color: #333; /* Thay đổi màu khi hover để hiển thị hiệu ứng */
+    }
+</style>
+
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
@@ -150,6 +178,7 @@
 
 <div class="navigation">
     <input type="button" id="prev-set" value="◀️" style="margin-right: 10px;">
+	<span id="set-number" style="font-size: 16px; margin: 0 10px;">0/0</span> <!-- Phần tử hiển thị số thứ tự -->
     <input type="button" id="next-set" value="▶️">
 </div>
 
@@ -194,6 +223,9 @@
             $after.css('clip-path', 'inset(0 ' + (sliderWidth - offsetX) + 'px 0 0)');
         }
 
+function updateSetNumber() {
+    $('#set-number').text(`${currentSetIndex + 1}/${imageSets.length}`);
+}
         function onMouseMove(e) {
             if (isDragging) {
                 var offsetX = e.clientX - $sliderHandle.parent().offset().left;
@@ -301,53 +333,61 @@
             });
         });
 
-        function displaySet(setName, beforeUrl, afterUrl) {
-            const setData = { before: beforeUrl, after: afterUrl };
-            imageSets.push(setData); // Thêm vào mảng bộ ảnh
+        function displaySet(setName, beforeUrl, afterUrl, index) {
+    const setData = { before: beforeUrl, after: afterUrl };
+    imageSets.push(setData); // Thêm vào mảng bộ ảnh
 
-            const $setDiv = $('<div class="set"></div>').appendTo('#album');
-            const $beforeImage = $('<img>').attr('src', beforeUrl).appendTo($setDiv);
-            const $afterImage = $('<img>').attr('src', afterUrl).appendTo($setDiv);
-            const $setNameDiv = $('<div class="set-name"></div>').text(setName).appendTo($setDiv);
+    const $setDiv = $('<div class="set"></div>').appendTo('#album');
+    const $beforeImage = $('<img>').attr('src', beforeUrl).appendTo($setDiv);
+    const $afterImage = $('<img>').attr('src', afterUrl).appendTo($setDiv);
+    const $setNameDiv = $('<div class="set-name"></div>').text(`${index + 1}. ${setName}`).appendTo($setDiv); // Thêm số thứ tự
 
-            // Thêm sự kiện click cho bộ ảnh
-            $setDiv.on('click', function() {
-                currentSetIndex = imageSets.length - 1; // Cập nhật chỉ số bộ ảnh hiện tại
-                updateDisplayedSet();
-            });
-        }
+    // Thêm sự kiện click cho bộ ảnh
+    $setDiv.on('click', function() {
+        currentSetIndex = imageSets.length - 1; // Cập nhật chỉ số bộ ảnh hiện tại
+        updateDisplayedSet();
+    });
+}
 
-        function loadAlbum() {
-            const albumRef = dbRef(db, 'sets');
-            get(albumRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    const album = snapshot.val();
-                    $('#album').empty();
-                    $.each(album, function(setName, urls) {
-                        if (urls && typeof urls === 'object' && urls.before && urls.after) {
-                            displaySet(setName, urls.before, urls.after);
-                        } else {
-                            console.error('Bộ ảnh không hợp lệ: ', setName);
-                        }
-                    });
-                    currentSetIndex = 0; // Đặt lại chỉ số
-                    updateDisplayedSet(); // Cập nhật ảnh hiển thị
+
+       function loadAlbum() {
+    const albumRef = dbRef(db, 'sets');
+    get(albumRef).then(snapshot => {
+        if (snapshot.exists()) {
+            const album = snapshot.val();
+            $('#album').empty();
+            let index = 0; // Khởi tạo chỉ số cho bộ ảnh
+            $.each(album, function(setName, urls) {
+                if (urls && typeof urls === 'object' && urls.before && urls.after) {
+                    displaySet(setName, urls.before, urls.after, index); // Gọi với chỉ số
+                    index++; // Tăng chỉ số
                 } else {
-                    console.log('Không tìm thấy bộ ảnh nào.');
+                    console.error('Bộ ảnh không hợp lệ: ', setName);
                 }
-            }).catch(error => {
-                console.error('Lỗi khi tải album: ', error);
             });
+            currentSetIndex = 0; // Đặt lại chỉ số
+            updateDisplayedSet(); // Cập nhật ảnh hiển thị
+            updateSetNumber(); // Cập nhật số thứ tự bộ ảnh
+        } else {
+            console.log('Không tìm thấy bộ ảnh nào.');
         }
+    }).catch(error => {
+        console.error('Lỗi khi tải album: ', error);
+    });
+}
+
+
 
         function updateDisplayedSet() {
-            if (imageSets.length === 0) return;
+    if (imageSets.length === 0) return;
 
-            const { before, after } = imageSets[currentSetIndex];
-            $('#before-image').attr('src', before);
-            $('#after-image').attr('src', after);
-            updateClipPath();
-        }
+    const { before, after } = imageSets[currentSetIndex];
+    $('#before-image').attr('src', before);
+    $('#after-image').attr('src', after);
+    updateClipPath();
+    updateSetNumber(); // Cập nhật số thứ tự bộ ảnh
+}
+
 
         // Sự kiện cho nút trước và sau
         $('#next-set').on('click', function() {
@@ -359,6 +399,9 @@
             currentSetIndex = (currentSetIndex - 1 + imageSets.length) % imageSets.length; // Chuyển sang bộ ảnh trước đó
             updateDisplayedSet();
         });
+
+        // Tải album ngay khi trang được tải
+        loadAlbum();
     });
 </script>
 
